@@ -1,0 +1,49 @@
+#include <VirtualWire.h>
+
+// Definição dos pinos
+const int PIN_JOY_X = A0;   // Direção (Servo)
+const int PIN_JOY_Y = A1;   // Tração (Motor CC)
+const int PIN_JOY_SW = 2;   // Botão do Joystick
+const int PIN_TX = 12;      // Pino de dados do Transmissor RF
+
+// Estrutura de dados para envio
+struct PacoteDados {
+  int eixoX;     // Direção
+  int eixoY;     // Velocidade/Sentido
+  bool botao;    // Estado do farol
+};
+
+PacoteDados dados;
+bool estadoBotaoAnterior = HIGH;
+bool farolLigado = false;
+
+void setup() {
+  pinMode(PIN_JOY_SW, INPUT_PULLUP);
+  
+  // Configuração VirtualWire
+  vw_set_tx_pin(PIN_TX);
+  vw_setup(2000); // Velocidade de transmissão (bps)
+}
+
+void loop() {
+  // Leitura da Direção (Eixo X)
+  dados.eixoX = analogRead(PIN_JOY_X);
+  
+  // Leitura da Tração (Eixo Y)
+  dados.eixoY = analogRead(PIN_JOY_Y);
+  
+  // Lógica Toggle para o Farol (Debounce simples)
+  bool leituraBotao = digitalRead(PIN_JOY_SW);
+  if (leituraBotao == LOW && estadoBotaoAnterior == HIGH) {
+    farolLigado = !farolLigado;
+    delay(200); // Debounce
+  }
+  estadoBotaoAnterior = leituraBotao;
+  dados.botao = farolLigado;
+
+  // Envia a estrutura de dados
+  vw_send((uint8_t *)&dados, sizeof(dados));
+  vw_wait_tx(); 
+  
+  delay(50); // Pequena pausa para estabilidade
+}

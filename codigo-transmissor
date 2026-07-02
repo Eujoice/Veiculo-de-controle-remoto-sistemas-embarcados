@@ -1,49 +1,64 @@
+//transmissor
 #include <VirtualWire.h>
 
-// Definição dos pinos
-const int PIN_JOY_X = A0;   // Direção (Servo)
-const int PIN_JOY_Y = A1;   // Tração (Motor CC)
-const int PIN_JOY_SW = 2;   // Botão do Joystick
-const int PIN_TX = 12;      // Pino de dados do Transmissor RF
+const int PIN_VRX = A1;
+const int PIN_VRY = A0;
+const int PIN_SW  = A2;
+const int PIN_TX  = 9;
 
-// Estrutura de dados para envio
-struct PacoteDados {
-  int eixoX;     // Direção
-  int eixoY;     // Velocidade/Sentido
-  bool botao;    // Estado do farol
-};
+bool farolLigado     = false;
+bool botaoAnterior   = HIGH;
+unsigned long ultimoDebounce = 0;
+const int DEBOUNCE_MS = 200;
 
-PacoteDados dados;
-bool estadoBotaoAnterior = HIGH;
-bool farolLigado = false;
+unsigned long ultimoEnvio = 0;
+const int intervaloEnvio  = 50;
 
 void setup() {
-  pinMode(PIN_JOY_SW, INPUT_PULLUP);
-  
-  // Configuração VirtualWire
+  pinMode(PIN_SW, INPUT);
   vw_set_tx_pin(PIN_TX);
-  vw_setup(2000); // Velocidade de transmissão (bps)
+  vw_set_ptt_inverted(true);
+  vw_setup(2000);
 }
 
 void loop() {
-  // Leitura da Direção (Eixo X)
-  dados.eixoX = analogRead(PIN_JOY_X);
-  
-  // Leitura da Tração (Eixo Y)
-  dados.eixoY = analogRead(PIN_JOY_Y);
-  
-  // Lógica Toggle para o Farol (Debounce simples)
-  bool leituraBotao = digitalRead(PIN_JOY_SW);
-  if (leituraBotao == LOW && estadoBotaoAnterior == HIGH) {
-    farolLigado = !farolLigado;
-    delay(200); // Debounce
-  }
-  estadoBotaoAnterior = leituraBotao;
-  dados.botao = farolLigado;
+  bool botaoAtual     = digitalRead(PIN_SW);
+  unsigned long agora = millis();
 
-  // Envia a estrutura de dados
-  vw_send((uint8_t *)&dados, sizeof(dados));
-  vw_wait_tx(); 
-  
-  delay(50); // Pequena pausa para estabilidade
+  if (botaoAtual == LOW && botaoAnterior == HIGH) {
+    if (agora - ultimoDebounce >= DEBOUNCE_MS) {
+      farolLigado    = !farolLigado;​
+      ultimoDebounce = agora;
+    }
+  }
+  botaoAnterior = botaoAtual;
+
+  if (agora - ultimoEnvio >= intervaloEnvio) {
+    ultimoEnvio = agora;
+
+    int vrx = analogRead(PIN_VRY);
+    int vry = analogRead(PIN_VRX);
+
+    uint8_t velocidade = 0;
+    uint8_t dir_motor  = 0;
+
+    if (vry < 412) {
+      dir_motor  = 2;
+      velocidade = map(vry, 412, 0, 0, 255);
+    } else if (vry > 612) {
+      dir_motor  = 1;
+      velocidade = map(vry, 612, 1023, 0, 255);
+    }
+
+    uint8_t angulo_servo = (uint8_t) map(vrx, 0, 1023, 135, 45);
+
+    uint8_t pacote[4];
+    pacote[0] = velocidade;
+    pacote[1] = dir_motor;
+    pacote[2] = angulo_servo;
+    pacote[3] = farolLigado ? 1 : 0;
+
+    vw_send(pacote, 4);
+    vw_wait_tx();
+  }
 }

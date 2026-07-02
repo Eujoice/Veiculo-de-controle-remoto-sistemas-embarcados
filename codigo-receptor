@@ -1,66 +1,76 @@
+//receptor
 #include <VirtualWire.h>
-#include <Servo.h>
+#include <ServoTimer2.h>
 
-// Pinos Receptor e Atuadores
-const int PIN_RX = 11;
-const int PIN_LED = 3;      // Farol
-const int PIN_SERVO = 9;    // Direção
-const int PIN_IN1 = 5;      // Ponte H - Sentido 1
-const int PIN_IN2 = 6;      // Ponte H - Sentido 2
+const int PIN_RX    = 8;
+const int PIN_FAROL = 3;
+const int PIN_SERVO = 4;
 
-Servo meuServo;
+const int PIN_EN  = 5;  
+const int PIN_IN1 = 7;  
+const int PIN_IN2 = 6;  
 
-struct PacoteDados {
-  int eixoX;
-  int eixoY;
-  bool botao;
-};
+ServoTimer2 servo;
 
-PacoteDados dados;
+// converte graus p microssegundo (ServoTimer2 usa µs)
+int grausParaUs(int graus) {
+  return map(graus, 0, 180, 600, 2400);
+}
 
 void setup() {
-  pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_IN1, OUTPUT);
-  pinMode(PIN_IN2, OUTPUT);
-  
-  meuServo.attach(PIN_SERVO);
-  
+  pinMode(PIN_FAROL, OUTPUT);
+  pinMode(PIN_EN,    OUTPUT);
+  pinMode(PIN_IN1,   OUTPUT);
+  pinMode(PIN_IN2,   OUTPUT);
+
+  digitalWrite(PIN_FAROL, LOW);
+  digitalWrite(PIN_IN1,   LOW);
+  digitalWrite(PIN_IN2,   LOW);
+  analogWrite(PIN_EN, 0);
+
+  servo.attach(PIN_SERVO);
+  servo.write(1500); // centro = 90 graus em microssegundos
+
   vw_set_rx_pin(PIN_RX);
+  vw_set_ptt_inverted(true);
   vw_setup(2000);
   vw_rx_start();
 }
 
 void loop() {
-  uint8_t buf[sizeof(dados)];
-  uint8_t buflen = sizeof(dados);
+  uint8_t pacote[VW_MAX_MESSAGE_LEN];
+  uint8_t tamanho = VW_MAX_MESSAGE_LEN;
 
-  if (vw_get_message(buf, &buflen)) {
-    memcpy(&dados, buf, sizeof(dados));
+  if (vw_get_message(pacote, &tamanho) && tamanho == 4) {
 
-    // 1. Controle do Farol
-    digitalWrite(PIN_LED, dados.botao ? HIGH : LOW);
+    uint8_t velocidade = pacote[0];
+    uint8_t dir_motor  = pacote[1];
+    uint8_t angulo_srv = pacote[2];
+    uint8_t farol      = pacote[3];
 
-    // 2. Controle de Direção (Servo)
-    // Mapeia 0-1023 para 45º à esquerda (45) e 45º à direita (135)
-    // O centro do servo é 90º.
-    int angulo = map(dados.eixoX, 0, 1023, 45, 135);
-    meuServo.write(angulo);
+    // farol
+    digitalWrite(PIN_FAROL, farol ? HIGH : LOW);
 
-    // 3. Controle de Tração (Motor CC)
-    // Joystick parado em ~512. Acima = Horário, Abaixo = Anti-horário.
-    if (dados.eixoY > 540) { // Para cima (Horário)
-      int vel = map(dados.eixoY, 541, 1023, 0, 255);
-      analogWrite(PIN_IN1, vel);
-      digitalWrite(PIN_IN2, LOW);
-    } 
-    else if (dados.eixoY < 480) { // Para baixo (Anti-horário)
-      int vel = map(dados.eixoY, 479, 0, 0, 255);
-      digitalWrite(PIN_IN1, LOW);
-      analogWrite(PIN_IN2, vel);
-    } 
-    else { // Zona morta (Parado)
-      digitalWrite(PIN_IN1, LOW);
-      digitalWrite(PIN_IN2, LOW);
+    // servo
+    servo.write(grausParaUs(angulo_srv));
+
+    // motor CC
+    switch (dir_motor) {
+      case 1: // frente
+        digitalWrite(PIN_IN1, HIGH);
+        digitalWrite(PIN_IN2, LOW);
+        analogWrite(PIN_EN, velocidade);
+        break;
+      case 2: // ré
+        digitalWrite(PIN_IN1, LOW);
+        digitalWrite(PIN_IN2, HIGH);
+        analogWrite(PIN_EN, velocidade);
+        break;
+      default: // parado
+        digitalWrite(PIN_IN1, LOW);
+        digitalWrite(PIN_IN2, LOW);
+        analogWrite(PIN_EN, 0);
+        break;
     }
   }
 }

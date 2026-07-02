@@ -1,4 +1,4 @@
-//transmissor
+// Código transmissor
 #include <VirtualWire.h>
 
 const int PIN_VRX = A1;

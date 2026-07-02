@@ -3,11 +3,11 @@
 
 const int PIN_VRX = A1;
 const int PIN_VRY = A0;
-const int PIN_SW  = A2;
-const int PIN_TX  = 9;
+const int PIN_SW = A2;
+const int PIN_TX = 9;
 
-bool farolLigado     = false;
-bool botaoAnterior   = HIGH;
+bool farolLigado = false;
+bool botaoAnterior = HIGH;
 unsigned long ultimoDebounce = 0;
 const int DEBOUNCE_MS = 200;
 
@@ -27,7 +27,7 @@ void loop() {
 
   if (botaoAtual == LOW && botaoAnterior == HIGH) {
     if (agora - ultimoDebounce >= DEBOUNCE_MS) {
-      farolLigado    = !farolLigado;​
+      farolLigado = !farolLigado;
       ultimoDebounce = agora;
     }
   }

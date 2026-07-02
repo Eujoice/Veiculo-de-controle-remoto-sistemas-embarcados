@@ -1,4 +1,4 @@
-//receptor
+// Código receptor
 #include <VirtualWire.h>
 #include <ServoTimer2.h>
 
